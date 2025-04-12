@@ -19,14 +19,6 @@ This repository contains the official implementation of **ConSeisGen**, a contro
 > *ConSeisGen: Controllable Synthetic Seismic Waveform Generation.* IEEE Geoscience and Remote Sensing Letters, 21, 1–5.  
 > [IEEE Link (DOI: 10.1109/LGRS.2023.3342801)](https://doi.org/10.1109/LGRS.2023.3342801)
 
----
-
-## 🌋 Key Features
-
-- **ACGAN-based Generator**: Conditions waveform synthesis on physical input (e.g., source-to-receiver distance).
-- **1D convolutional architecture**: Designed specifically for seismic waveform data.
-- **Multi-channel output**: Generates 3-channel waveform sequences.
-- **Wasserstein & ACGAN support**: Flexible GAN objective selection.
 
 ---
 
