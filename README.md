@@ -3,6 +3,12 @@
   <img src="images/archi.png" alt="ConSeisGen Architecture" width="700"/>
 </p>
 
+<p align="center">
+  <a href="https://ieeexplore.ieee.org/document/10339272">
+    <img src="https://img.shields.io/badge/View%20on-IEEE%20Xplore-blue" alt="View on IEEE Xplore">
+  </a>
+</p>
+
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/pytorch-1.9%2B-%23ee4c2c.svg)](https://pytorch.org/)
 
