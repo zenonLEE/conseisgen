@@ -1,4 +1,5 @@
-# ConSeisGen: Controllable Seismic Waveform Generation
+# ConSeisGen: Controllable Synthetic Seismic Waveform Generation
+
 <p align="center">
   <img src="images/archi.png" alt="ConSeisGen Architecture" width="700"/>
 </p>
