@@ -32,6 +32,7 @@ ConSeisGen/
 ├── outputs/         # Generated waveform outputs, model checkpoints
 ├── networks.py      # Model definitions (Generator, Discriminator, blocks)
 ├── train.py         # Training entry point
+├── inference.py     # Inference code
 ├── trainer.py       # Training loops and loss functions
 └── utils.py         # Dataset loading, metrics, and utility functions
 ```
