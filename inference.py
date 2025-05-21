@@ -14,7 +14,8 @@ def parse_args():
     parser.add_argument('--model_path', type=str, required=True, help="Path to the trained generator model checkpoint (.pt file)")
     parser.add_argument('--output_dir', type=str, required=True, help="Directory to save the generated waveforms")
     parser.add_argument('--num_samples', type=int, default=10, help="Number of waveforms to generate (default: 10)")
-    parser.add_argument('--magnitude', type=float, default=4.5, help="Desired magnitude for generation (default: 4.5)")
+    # Changed 'magnitude' to 'distance'
+    parser.add_argument('--distance', type=float, default=10.0, help="Desired distance for generation (e.g., in km).") 
     
     # Determine default device
     default_device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -29,7 +30,8 @@ if __name__ == '__main__':
     print(f"  Model path: {args.model_path}")
     print(f"  Output directory: {args.output_dir}")
     print(f"  Number of samples: {args.num_samples}")
-    print(f"  Magnitude: {args.magnitude}")
+    # Changed 'Magnitude' to 'Distance' and 'args.magnitude' to 'args.distance'
+    print(f"  Distance: {args.distance}") 
     print(f"  Device: {args.device}")
 
     # Load configuration
@@ -53,22 +55,20 @@ if __name__ == '__main__':
         # Attempt to load common state dict key patterns
         if 'model_state_dict_gen' in state_dict:
             generator.load_state_dict(state_dict['model_state_dict_gen'])
-        elif 'gen_state_dict' in state_dict: # Another common pattern
+        elif 'gen_state_dict' in state_dict: 
             generator.load_state_dict(state_dict['gen_state_dict'])
-        elif 'generator_state_dict' in state_dict: # Yet another common pattern
+        elif 'generator_state_dict' in state_dict: 
             generator.load_state_dict(state_dict['generator_state_dict'])
-        elif 'state_dict' in state_dict: # A more generic pattern
-             # Check if the state_dict itself is the model's state_dict
+        elif 'state_dict' in state_dict: 
             try:
                 generator.load_state_dict(state_dict)
                 print("Loaded state_dict directly.")
             except RuntimeError:
-                 # If direct loading fails, it might be nested within 'state_dict'
-                if 'model' in state_dict and isinstance(state_dict['model'], dict): # common in some saving approaches
+                if 'model' in state_dict and isinstance(state_dict['model'], dict): 
                     generator.load_state_dict(state_dict['model'])
-                else: # Fallback to trying the original state_dict if 'model' key is not what we expect
+                else: 
                     raise KeyError("Suitable generator state dictionary key not found in checkpoint after trying common patterns and nested 'model' key.")
-        else: # If no common key is found, try loading the whole state_dict directly
+        else: 
             generator.load_state_dict(state_dict)
             print("Loaded state_dict directly as no common key was found.")
 
@@ -97,14 +97,15 @@ if __name__ == '__main__':
     noise = torch.randn(args.num_samples, noise_length, device=args.device)
     print(f"Generated noise of shape: {noise.shape}")
 
-    # Prepare magnitude condition tensor
-    magnitudes = torch.full((args.num_samples,), args.magnitude, device=args.device).float()
-    print(f"Prepared magnitudes tensor of shape: {magnitudes.shape} with value: {args.magnitude}")
+    # Prepare distance condition tensor (changed from magnitude)
+    distances = torch.full((args.num_samples,), args.distance, device=args.device).float()
+    print(f"Prepared distances tensor of shape: {distances.shape} with value: {args.distance}")
 
     # Perform inference
     with torch.no_grad():
         print("Running generator model...")
-        generated_waveforms = generator(noise, magnitudes)
+        # Changed 'magnitudes' to 'distances'
+        generated_waveforms = generator(noise, distances) 
         print("Waveform generation complete.")
 
     # Print the shape of the generated waveforms
@@ -118,9 +119,10 @@ if __name__ == '__main__':
 
     for i in range(args.num_samples):
         sample_waveform = waveforms_np[i]
-        # Filename uses a consistent format for magnitude, e.g., 4.5 -> 4p5
-        mag_str = str(args.magnitude).replace('.', 'p')
-        filename = f"waveform_sample_{i}_mag_{mag_str}.npy"
+        # Filename uses a consistent format for distance, e.g., 10.0 -> 10p0
+        # Changed filename to reflect distance and format
+        dist_str = f"{args.distance:.1f}".replace('.', 'p') # Format to one decimal place and replace . with p
+        filename = f"waveform_sample_{i}_dist_{dist_str}.npy"
         filepath = os.path.join(args.output_dir, filename)
         np.save(filepath, sample_waveform)
 

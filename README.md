@@ -131,7 +131,7 @@ python inference.py \
     --model_path /path/to/your/trained_generator.pt \
     --output_dir ./generated_waveforms \
     --num_samples 20 \
-    --magnitude 5.0
+    --distance 10.0
 ```
 
 ### Arguments
@@ -140,6 +140,6 @@ python inference.py \
 -   `--model_path`: Path to the saved generator model checkpoint (`.pt` file). This should be a checkpoint from a trained ConSeisGen model.
 -   `--output_dir`: Directory where the generated waveform `.npy` files will be saved. Each waveform is saved as a separate NumPy file.
 -   `--num_samples`: (Optional) Number of waveforms to generate. Defaults to 10.
--   `--magnitude`: (Optional) Target magnitude for the generated waveforms. This is the conditional input to the generator. Defaults to 4.5.
+-   `--distance`: (Optional) Target distance for the generated waveforms (e.g., in km). This is the conditional input to the generator. Defaults to 10.0.
 -   `--device`: (Optional) Device to run the inference on, e.g., 'cpu' or 'cuda'. If not specified, it defaults to 'cuda' if a CUDA-enabled GPU is available, otherwise 'cpu'.
 ```
