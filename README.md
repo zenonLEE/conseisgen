@@ -116,3 +116,30 @@ If you use this work in your research, please cite:
 ## 📬 Contact
 For questions or collaborations, feel free to contact:
 - Yuanming Li: [lym7499500@gmail.com](mailto:lym7499500@gmail.com)
+
+---
+
+## ⚡ Inference
+
+The `inference.py` script generates synthetic seismic waveforms using a trained ConSeisGen (ACGAN) model.
+
+### Basic Usage
+
+```bash
+python inference.py \
+    --config configs/seismo.yaml \
+    --model_path /path/to/your/trained_generator.pt \
+    --output_dir ./generated_waveforms \
+    --num_samples 20 \
+    --magnitude 5.0
+```
+
+### Arguments
+
+-   `--config`: Path to the model configuration file (e.g., `configs/seismo.yaml`). This file contains parameters used during the model's training, such as generator architecture details.
+-   `--model_path`: Path to the saved generator model checkpoint (`.pt` file). This should be a checkpoint from a trained ConSeisGen model.
+-   `--output_dir`: Directory where the generated waveform `.npy` files will be saved. Each waveform is saved as a separate NumPy file.
+-   `--num_samples`: (Optional) Number of waveforms to generate. Defaults to 10.
+-   `--magnitude`: (Optional) Target magnitude for the generated waveforms. This is the conditional input to the generator. Defaults to 4.5.
+-   `--device`: (Optional) Device to run the inference on, e.g., 'cpu' or 'cuda'. If not specified, it defaults to 'cuda' if a CUDA-enabled GPU is available, otherwise 'cpu'.
+```

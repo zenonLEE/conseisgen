@@ -1,109 +1,135 @@
 import argparse
-import os
-import sys
+import os # For directory creation
 import torch
-import numpy as np
-import matplotlib.pyplot as plt
-import torchvision.utils as vutils
-from torch.autograd import Variable
-from scipy import signal
-from utils import get_config, pytorch03_to_pytorch04
-from trainer import Seismo_Trainer_ACGAN_real_dist
+import numpy as np # For saving waveforms
+import yaml # For configuration loading (explicitly requested)
+
+from utils import get_config
+from networks import SeisGen_ACGAN_real_dist # Import the generator model
+
+def parse_args():
+    """Parses command-line arguments."""
+    parser = argparse.ArgumentParser(description="Generate waveforms using a trained ACGAN model.")
+    parser.add_argument('--config', type=str, required=True, help="Path to the YAML configuration file (e.g., 'configs/seismo.yaml')")
+    parser.add_argument('--model_path', type=str, required=True, help="Path to the trained generator model checkpoint (.pt file)")
+    parser.add_argument('--output_dir', type=str, required=True, help="Directory to save the generated waveforms")
+    parser.add_argument('--num_samples', type=int, default=10, help="Number of waveforms to generate (default: 10)")
+    parser.add_argument('--magnitude', type=float, default=4.5, help="Desired magnitude for generation (default: 4.5)")
+    
+    # Determine default device
+    default_device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    parser.add_argument('--device', type=str, default=default_device, help=f"Device to run inference on (default: {default_device})")
+    
+    return parser.parse_args()
+
+if __name__ == '__main__':
+    args = parse_args()
+    print("Parsed arguments:")
+    print(f"  Config file: {args.config}")
+    print(f"  Model path: {args.model_path}")
+    print(f"  Output directory: {args.output_dir}")
+    print(f"  Number of samples: {args.num_samples}")
+    print(f"  Magnitude: {args.magnitude}")
+    print(f"  Device: {args.device}")
+
+    # Load configuration
+    config = get_config(args.config)
+    print("\nLoaded configuration:")
+    print(f"  Generator Length: {config['gen_length']}")
+    print(f"  Generator Noise Length: {config['gen']['noise_length']}")
+
+    # Initialize the generator model
+    print("\nInitializing generator model...")
+    generator = SeisGen_ACGAN_real_dist(
+        gen_length=config['gen_length'],
+        params=config['gen']
+    )
+    print("Generator model initialized.")
+
+    # Load trained weights
+    print(f"Loading trained weights from {args.model_path}...")
+    try:
+        state_dict = torch.load(args.model_path, map_location=args.device)
+        # Attempt to load common state dict key patterns
+        if 'model_state_dict_gen' in state_dict:
+            generator.load_state_dict(state_dict['model_state_dict_gen'])
+        elif 'gen_state_dict' in state_dict: # Another common pattern
+            generator.load_state_dict(state_dict['gen_state_dict'])
+        elif 'generator_state_dict' in state_dict: # Yet another common pattern
+            generator.load_state_dict(state_dict['generator_state_dict'])
+        elif 'state_dict' in state_dict: # A more generic pattern
+             # Check if the state_dict itself is the model's state_dict
+            try:
+                generator.load_state_dict(state_dict)
+                print("Loaded state_dict directly.")
+            except RuntimeError:
+                 # If direct loading fails, it might be nested within 'state_dict'
+                if 'model' in state_dict and isinstance(state_dict['model'], dict): # common in some saving approaches
+                    generator.load_state_dict(state_dict['model'])
+                else: # Fallback to trying the original state_dict if 'model' key is not what we expect
+                    raise KeyError("Suitable generator state dictionary key not found in checkpoint after trying common patterns and nested 'model' key.")
+        else: # If no common key is found, try loading the whole state_dict directly
+            generator.load_state_dict(state_dict)
+            print("Loaded state_dict directly as no common key was found.")
+
+        print("Trained weights loaded successfully.")
+    except FileNotFoundError:
+        print(f"Error: Model checkpoint file not found at {args.model_path}")
+        exit(1)
+    except KeyError as e:
+        print(f"Error: Could not find key {e} in the model checkpoint. Common keys are 'model_state_dict_gen', 'gen_state_dict', 'generator_state_dict'. Please check your checkpoint file.")
+        exit(1)
+    except Exception as e:
+        print(f"An error occurred while loading the model weights: {e}")
+        exit(1)
 
 
-def stft_batch(inputs, sample_rate):
-    """Batch-wise short-time Fourier transform for 3-channel seismic waveforms."""
-    all_Sxx = []
-    for i in range(len(inputs)):
-        x = inputs[i]
-        Sxx_channels = []
-        for ch in range(3):
-            _, _, Sxx = signal.spectrogram(np.squeeze(x[ch, :]), fs=sample_rate, nperseg=50,
-                                           noverlap=25, nfft=256, scaling='density')
-            Sxx = (Sxx - np.min(Sxx)) / (np.max(Sxx) - np.min(Sxx))
-            Sxx_channels.append(np.expand_dims(Sxx, axis=2))
-        Sxx_ = np.concatenate(Sxx_channels, axis=2)
-        all_Sxx.append(np.expand_dims(Sxx_, axis=0))
-    return _, _, np.concatenate(all_Sxx, axis=0)
+    # Set model to evaluation mode and move to device
+    generator.eval()
+    generator.to(args.device)
+    print(f"Model set to evaluation mode and moved to {args.device}.")
 
+    # Core inference logic
+    print("\nStarting waveform generation...")
+    noise_length = config['gen']['noise_length']
+    
+    # Generate random noise vectors
+    noise = torch.randn(args.num_samples, noise_length, device=args.device)
+    print(f"Generated noise of shape: {noise.shape}")
 
-def plot_seismic_waveform(images, file_name):
-    """Plot a 3-channel waveform into a single image."""
-    length = images.shape[1]
-    time = np.arange(0.0, length / 100, step=1 / 100)
-    fig, axes = plt.subplots(nrows=3, figsize=(4, 4), sharex=True)
-    for i in range(3):
-        axes[i].plot(time, np.squeeze(images[i, :]), linewidth=0.5)
-        if i == 2:
-            axes[i].set_xlabel('Time [sec]')
-    plt.tight_layout()
-    plt.savefig(file_name)
-    plt.close()
+    # Prepare magnitude condition tensor
+    magnitudes = torch.full((args.num_samples,), args.magnitude, device=args.device).float()
+    print(f"Prepared magnitudes tensor of shape: {magnitudes.shape} with value: {args.magnitude}")
 
+    # Perform inference
+    with torch.no_grad():
+        print("Running generator model...")
+        generated_waveforms = generator(noise, magnitudes)
+        print("Waveform generation complete.")
 
-# -----------------------------
-# Argument Parser
-# -----------------------------
-parser = argparse.ArgumentParser()
+    # Print the shape of the generated waveforms
+    print(f"Shape of generated waveforms: {generated_waveforms.shape}")
 
-parser.add_argument('--config', type=str, default=f'./confgis/sesmo.yaml', help="Path to the config file")
-parser.add_argument('--display_size', type=int, default=1000, help="Number of waveforms to generate")
-parser.add_argument('--output_folder', type=str, default='test_results', help="Folder to save results")
-parser.add_argument('--checkpoint', type=str, default=f'outputs/checkpoints/gen_00270000.pt', help="Path to model checkpoint")
-parser.add_argument('--seed', type=int, default=10, help="Random seed")
-parser.add_argument('--output_path', type=str, default='.', help="Root output path")
-opts = parser.parse_args()
+    # Save generated waveforms
+    print(f"\nSaving generated waveforms to {args.output_dir}...")
+    os.makedirs(args.output_dir, exist_ok=True)
 
-# -----------------------------
-# Output folder setup
-# -----------------------------
-opts.output_folder = os.path.join(opts.output_folder, opts.checkpoint.split('/')[1])
-os.makedirs(opts.output_folder, exist_ok=True)
+    waveforms_np = generated_waveforms.detach().cpu().numpy()
 
-# -----------------------------
-# Seed
-# -----------------------------
-torch.manual_seed(opts.seed)
-torch.cuda.manual_seed(opts.seed)
+    for i in range(args.num_samples):
+        sample_waveform = waveforms_np[i]
+        # Filename uses a consistent format for magnitude, e.g., 4.5 -> 4p5
+        mag_str = str(args.magnitude).replace('.', 'p')
+        filename = f"waveform_sample_{i}_mag_{mag_str}.npy"
+        filepath = os.path.join(args.output_dir, filename)
+        np.save(filepath, sample_waveform)
 
-# -----------------------------
-# Load model and config
-# -----------------------------
-config = get_config(opts.config)
-trainer = Seismo_Trainer_v4(config)
-state_dict = torch.load(opts.checkpoint)
-trainer.gen.load_state_dict(state_dict)
-trainer.cuda()
-trainer.eval()
+    print(f"Successfully saved {args.num_samples} waveforms in {args.output_dir}")
 
-decode = trainer.gen.decode
-
-# -----------------------------
-# Inference & Visualization
-# -----------------------------
-with torch.no_grad():
-    noise = Variable(torch.randn(opts.display_size, 1, config['noise_length']).cuda())
-    fake = decode(noise).cpu().numpy()
-
-    print('Saving waveform data to .npz')
-    np.savez(os.path.join(opts.output_folder, 'data.npz'), ev=fake)
-
-    print('Plotting mean spectrogram...')
-    f, t, spec = stft_batch(fake, sample_rate=100)
-    mean_spec = np.mean(spec, axis=0)
-
-    fig, axes = plt.subplots(nrows=3, ncols=1, sharex=True)
-    for i in range(3):
-        axes[i].pcolor(t, f, np.squeeze(mean_spec[:, :, i]))
-        axes[i].set_ylim([0, 50])
-        if i == 1:
-            axes[i].set_xlabel('Frequency [Hz]')
-        if i == 2:
-            axes[i].set_xlabel('Time [sec]')
-    plt.tight_layout()
-    plt.savefig(os.path.join(opts.output_folder, 'mean_spec.png'))
-    plt.close()
-
-    print('Saving waveform plots...')
-    for i in range(fake.shape[0]):
-        plot_seismic_waveform(fake[i], os.path.join(opts.output_folder, f'gen_{i}.png'))
+    # Note on waveform data range and denormalization
+    # The saved waveforms are in the range [0, 1] due to the generator's sigmoid output.
+    # To convert them to the original physical scale, denormalization would be
+    # necessary, typically using the min/max values from the original training data's
+    # scaling process. This script does not perform denormalization.
+    print("\nNote: Saved waveforms are normalized in the range [0, 1].")
+    print("Denormalization (e.g., using training data's min/max values) is needed to convert to physical scale.")
